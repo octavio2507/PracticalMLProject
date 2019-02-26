@@ -1,0 +1,109 @@
+---
+title: "Machine Learning Project"
+author: "Octavio Reyes Matte"
+date: "February 25, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 
+
+## Getting and cleaning the data
+
+First step is to download and load the necessary libraries and the training and test datasets 
+
+```{r, echo=TRUE, cache=TRUE}
+if(!require(pacman)) install.packages("pacman")
+pacman::p_load(caret, randomForest, dplyr)
+
+if(!file.exists("MLProject")){
+  dir.create("MLProject")
+}
+
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(trainUrl, "MLProject/trainData.csv")
+download.file(testUrl, "MLProject/testData.csv")
+
+train <- read.csv("MLProject/trainData.csv")
+test <- read.csv("MLProject/testData.csv")
+```
+
+Now, these datasets have 160 different variables each, but we are not interested in all of them. For purposes of this work, we will use all acceleration measures in the three axes (X, Y and Z) as predictor variables. However, we will not use values derived from the data: Kurtosis, Skewness, Standard Deviaton, Variance, min, max and average values will be filtered out.
+
+```{r, echo=TRUE, cache=TRUE}
+trainTidy <- train %>% dplyr::select(-starts_with("kurtosis"))
+trainTidy <- trainTidy %>% dplyr::select(-starts_with("skewness"))
+trainTidy <- trainTidy %>% dplyr::select(-starts_with("stddev"))
+trainTidy <- trainTidy %>% dplyr::select(-starts_with("var"))
+
+trainTidy <- trainTidy %>% dplyr::select(-starts_with("max_"))
+trainTidy <- trainTidy %>% dplyr::select(-starts_with("min_"))
+trainTidy <- trainTidy %>% dplyr::select(-starts_with("amplitude_yaw"))
+
+trainTidy <- trainTidy %>% dplyr::select(classe, contains("_x"), contains("_y"), contains("_z"), -starts_with("avg_"))
+
+```
+
+The same must be done to the test data 
+```{r, echo=TRUE, cache=TRUE}
+testTidy <- test %>% dplyr::select(-starts_with("kurtosis"))
+testTidy <- testTidy %>% dplyr::select(-starts_with("skewness"))
+testTidy <- testTidy %>% dplyr::select(-starts_with("stddev"))
+testTidy <- testTidy %>% dplyr::select(-starts_with("var"))
+
+testTidy <- testTidy %>% dplyr::select(-starts_with("max_"))
+testTidy <- testTidy %>% dplyr::select(-starts_with("min_"))
+testTidy <- testTidy %>% dplyr::select(-starts_with("amplitude_yaw"))
+
+testTidy <- testTidy %>% dplyr::select(contains("_x"), contains("_y"), contains("_z"), -starts_with("avg_"))
+testTidy$classe <- NA
+
+```
+
+### Split the train dataset into new training and test datasets
+
+This is done to test the model before the predictions necessary to answer in the quiz.
+
+```{r, cache=TRUE, echo=TRUE}
+set.seed(2507)
+
+mytrainset <- createDataPartition(y=trainTidy$classe, p=0.9, list=FALSE)
+myTrainingSet <- trainTidy[mytrainset, ] 
+myTestingSet <- trainTidy[-mytrainset, ]
+```
+
+
+## Building the model
+
+For building this model, we will use a simple k-fold repeated cross validation. In this case, it will be ten-fold cross validation repeated ten times. We will store it in a variable called "controlFit"
+
+Now, we train the model considering the class of exercise ( _classe_ variable in the data) as our value and all the other factors as predictor variables. For this case, we will use a random forest as our method. This is just a personal preference. Don't forget to include the cross-validation in the model.
+
+```{r, echo=TRUE, cache=TRUE}
+
+controlFit <- trainControl(method = "repeatedCV", number = 10, repeats = 10, allowParallel = TRUE)
+TrainFit <- randomForest(classe~., myTrainingSet)
+
+```
+## Predict using the model
+
+```{r, echo=TRUE, cache=TRUE}
+predictions <- predict(TrainFit, myTestingSet, type="class")
+
+confusionMatrix(predictions, myTestingSet$classe)
+```
+
+## Generate the predictions in the test data and save the data
+
+```{r}
+predictionsTest <- predict(TrainFit, testTidy, type = "class")
+
+predictionsTest
+```
+
+
